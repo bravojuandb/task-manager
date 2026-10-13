@@ -4,8 +4,10 @@ CREATE TABLE IF NOT EXISTS tasks (
         CHECK (task_type IN (
             'email', 'phone_call', 'order',
             'follow_up', 'quotation', 'other')),
-    recipient TEXT NOT NULL, -- person or organization associated with the task
-    description TEXT NOT NULL,
+    recipient TEXT NOT NULL -- person or organization associated with the task
+        CONSTRAINT tasks_recipient_not_blank CHECK (recipient ~ '[^[:space:]]'),
+    description TEXT NOT NULL
+        CONSTRAINT tasks_description_not_blank CHECK (description ~ '[^[:space:]]'),
     status TEXT NOT NULL DEFAULT 'pending'
         CHECK (status IN ('pending', 'in_progress', 'completed')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
