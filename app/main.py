@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import FastAPI, HTTPException
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
@@ -46,14 +48,27 @@ def create_task(task: TaskCreate):
     return created_task
 
 @app.get("/tasks")
-def list_tasks():
+def list_tasks(
+    status: Literal["pending", "in_progress", "completed"] | None = None,
+):
     with get_connection() as connection:
         with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT *
-                FROM tasks
-                ORDER BY created_at DESC, task_id DESC;
-            """)
+            if status is None:
+                cursor.execute("""
+                    SELECT *
+                    FROM tasks
+                    ORDER BY created_at DESC, task_id DESC;
+                """)
+            else:
+                cursor.execute(
+                    """
+                    SELECT *
+                    FROM tasks
+                    WHERE status = %s
+                    ORDER BY created_at DESC, task_id DESC;
+                    """,
+                    (status,),
+                )
             tasks = cursor.fetchall()
 
     return tasks
@@ -110,5 +125,42 @@ def update_task_status(task_id: int, update: TaskStatusUpdate):
                     (update.status, update.status, task_id),
                 )
                 updated_task = cursor.fetchone()
+
+    return updated_task
+
+
+@app.delete("/tasks/{task_id}")
+def delete_task(task_id: int):
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM tasks WHERE task_id = %s RETURNING *;",
+                (task_id,),
+            )
+            deleted_task = cursor.fetchone()
+            if deleted_task is None:
+                raise HTTPException(status_code=404, detail="Task not found")
+
+    return deleted_task
+
+
+@app.put("/tasks/{task_id}/details")
+def update_task_details(task_id: int, details: TaskCreate):
+    with get_connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE tasks
+                SET task_type = %s,
+                    recipient = %s,
+                    description = %s
+                WHERE task_id = %s
+                RETURNING *;
+                """,
+                (details.task_type, details.recipient, details.description, task_id),
+            )
+            updated_task = cursor.fetchone()
+            if updated_task is None:
+                raise HTTPException(status_code=404, detail="Task not found")
 
     return updated_task
