@@ -12,3 +12,9 @@ class TaskCreate(BaseModel):
     task_type: Literal["email", "phone_call", "order", "follow_up", "quotation", "other"]
     recipient: RequiredText
     description: RequiredText
+
+
+class TaskStatusUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["pending", "in_progress", "completed"]
