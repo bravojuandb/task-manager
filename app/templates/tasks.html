@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>k8 task manager</title><link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}">
+</head>
+<body>
+<main class="shell">
+  <header class="page-header"><div><a class="brand" href="/">k8 task manager</a><h1>My tasks</h1><p>Pax omnium rerum tranquillitas ordinis.</p></div><a class="button primary" href="/ui/tasks/new">+ New task</a></header>
+  {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
+  <form class="filter" action="/" method="get">
+    <label for="status">Show</label><select id="status" name="status"><option value="">All statuses</option>{% for status in statuses %}<option value="{{ status }}" {% if selected_status == status %}selected{% endif %}>{{ status|replace('_', ' ')|title }}</option>{% endfor %}</select><button type="submit">Apply filter</button><span class="count">{{ tasks|length }} task{{ '' if tasks|length == 1 else 's' }}</span>
+  </form>
+  <section class="task-list" aria-label="Tasks">
+  {% for task in tasks %}
+    <article class="task">
+      <div class="task-top"><span class="badge {{ task.status }}">{{ task.status|replace('_', ' ') }}</span><span class="meta">#{{ task.task_id }} · {{ task.task_type|replace('_', ' ')|title }}</span></div>
+      <h2>{{ task.recipient }}</h2><p class="description">{{ task.description }}</p>
+      <p class="meta">Created {{ task.created_at.strftime('%d %b %Y, %H:%M %Z') }}{% if task.completed_at %} · Completed {{ task.completed_at.strftime('%d %b %Y, %H:%M %Z') }}{% endif %}</p>
+      <div class="actions">
+        <a class="button" href="/ui/tasks/{{ task.task_id }}/edit">Edit details</a>
+        {% if task.status != 'completed' %}
+        <form action="/ui/tasks/{{ task.task_id }}/status" method="post">
+          <input type="hidden" name="filter_status" value="{{ selected_status }}">
+          {% if task.status == 'pending' %}<button name="status" value="in_progress">Start task</button>{% else %}<button name="status" value="pending">Set pending</button>{% endif %}
+          <button class="primary" name="status" value="completed">Complete</button>
+        </form>
+        {% endif %}
+        <details class="delete"><summary>Delete</summary><form action="/ui/tasks/{{ task.task_id }}/delete" method="post"><p>Permanently delete this task?</p><input type="hidden" name="filter_status" value="{{ selected_status }}"><button class="danger" name="confirm" value="yes">Yes, delete task</button><p class="meta">Close this panel to cancel.</p></form></details>
+      </div>
+    </article>
+  {% else %}
+    <div class="empty"><h2>{{ 'No matching tasks' if selected_status else 'No tasks yet' }}</h2><p>{{ 'Choose another status to see more tasks.' if selected_status else 'Create your first task to get started.' }}</p><a href="{{ '/' if selected_status else '/ui/tasks/new' }}">{{ 'Show all tasks' if selected_status else 'Create a task' }} →</a></div>
+  {% endfor %}
+  </section>
+</main>
+</body></html>

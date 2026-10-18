@@ -1,13 +1,17 @@
+from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.db import get_connection
 from app.models import TaskCreate, TaskStatusUpdate
+from app.web import create_web_router
 
 app = FastAPI(title="k8 Task Manager", docs_url=None)
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 
 @app.get("/docs", include_in_schema=False)
@@ -164,3 +168,13 @@ def update_task_details(task_id: int, details: TaskCreate):
                 raise HTTPException(status_code=404, detail="Task not found")
 
     return updated_task
+
+
+app.include_router(create_web_router(
+    list_tasks=list_tasks,
+    retrieve_task=retrieve_task,
+    create_task=create_task,
+    update_task_details=update_task_details,
+    update_task_status=update_task_status,
+    delete_task=delete_task,
+))
