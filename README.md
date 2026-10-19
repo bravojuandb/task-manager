@@ -34,3 +34,51 @@ no JavaScript framework is required. Dates include the database-returned timezon
 ```bash
 .venv/bin/python -m unittest discover -s tests -v
 ```
+
+## Run as a systemd service on k8
+
+`deploy/k8-task-manager.service` is configured for user `bravojuandb` and the
+checkout at `/home/bravojuandb/projects/task-manager`. Adjust those paths and the
+user/group if installing elsewhere. The application loads the existing `.env`
+through python-dotenv; no credentials belong in the service file.
+
+Stop the development Uvicorn process with Ctrl+C first, to free port 8000.
+From the project directory, install and enable the service:
+
+```bash
+chmod 600 .env
+sudo install -m 644 deploy/k8-task-manager.service /etc/systemd/system/k8-task-manager.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now k8-task-manager.service
+systemctl status k8-task-manager.service --no-pager
+curl --fail http://127.0.0.1:8000/ -o /dev/null
+```
+
+The service runs as the regular application user, starts at boot independently
+of SSH sessions, and restarts after a failure. Uvicorn listens on loopback only.
+It does not use development auto-reload. PostgreSQL data stays in PostgreSQL;
+restarting this service does not remove tasks.
+
+Useful commands:
+
+```bash
+journalctl -u k8-task-manager.service -n 50 --no-pager
+journalctl -u k8-task-manager.service -f
+sudo systemctl restart k8-task-manager.service
+sudo systemctl stop k8-task-manager.service
+```
+
+After changing Python code, restart the service. It runs this checkout, so branch
+changes also affect the deployed files. Keep development on a separate port
+(for example `--port 8001`) or stop the service before using port 8000.
+
+To disable automatic startup and return to manual operation:
+
+```bash
+sudo systemctl disable --now k8-task-manager.service
+```
+
+For Data Engineering: `ExecStart` selects the executable, `WorkingDirectory`
+sets its context, `.env` supplies configuration, `Restart` handles process
+failures, and the journal collects logs. The same concepts apply to running
+data pipelines reliably, although scheduled jobs often use systemd timers.
