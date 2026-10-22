@@ -20,11 +20,20 @@
   {% for task in tasks %}
     <article class="task">
       <div class="task-top"><span class="badge {{ task.status }}">{{ task.status|replace('_', ' ') }}</span><span class="meta">#{{ task.task_id }} · {{ task.task_type|replace('_', ' ')|title }}</span></div>
-      <h2>{{ task.recipient }}</h2><p class="description">{{ task.description }}</p>
+      {% if task.task_type == 'order' %}
+        {% if task.customer and task.supplier %}
+        <h2>{{ task.customer }}</h2><p>Supplier: {{ task.supplier }}</p>
+        <p class="meta">Placed: {{ 'Yes' if task.order_placed else 'No' }} · Delivered: {{ 'Yes' if task.order_delivered else 'No' }}</p>
+        {% else %}<h2>{{ task.other or task.customer or task.supplier }}</h2><p class="meta">Contact to classify: edit this order to enter the customer, supplier and delivery progress.</p>{% endif %}
+      {% else %}
+        <h2>{{ task.customer or task.supplier or task.other }}</h2>
+        {% for role in ('customer', 'supplier', 'other') %}{% if task[role] %}<p class="meta">{{ role|title }}: {{ task[role] }}</p>{% endif %}{% endfor %}
+      {% endif %}
+      <p class="description">{{ task.description }}</p>
       <p class="meta">Created {{ task.created_at.strftime('%d %b %Y, %H:%M %Z') }}{% if task.completed_at %} · Completed {{ task.completed_at.strftime('%d %b %Y, %H:%M %Z') }}{% endif %}</p>
       <div class="actions">
         <a class="button" href="/ui/tasks/{{ task.task_id }}/edit">Edit details</a>
-        {% if task.status != 'completed' %}
+        {% if task.status != 'completed' and task.task_type != 'order' %}
         <form action="/ui/tasks/{{ task.task_id }}/status" method="post">
           <input type="hidden" name="filter_status" value="{{ selected_status }}"><input type="hidden" name="sort" value="{{ selected_sort }}">
           {% if task.status == 'pending' %}<button name="status" value="in_progress">Start task</button>{% else %}<button name="status" value="pending">Set pending</button>{% endif %}
