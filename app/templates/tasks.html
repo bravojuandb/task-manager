@@ -9,7 +9,12 @@
   <header class="page-header"><div><a class="brand" href="/">k8 task manager</a><h1>My tasks</h1><p>Pax omnium rerum tranquillitas ordinis.</p></div><a class="button primary" href="/ui/tasks/new">+ New task</a></header>
   {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
   <form class="filter" action="/" method="get">
-    <label for="status">Show</label><select id="status" name="status"><option value="">All statuses</option>{% for status in statuses %}<option value="{{ status }}" {% if selected_status == status %}selected{% endif %}>{{ status|replace('_', ' ')|title }}</option>{% endfor %}</select><button type="submit">Apply filter</button><span class="count">{{ tasks|length }} task{{ '' if tasks|length == 1 else 's' }}</span>
+    <label for="status">Show</label><select id="status" name="status"><option value="">All statuses</option>{% for status in statuses %}<option value="{{ status }}" {% if selected_status == status %}selected{% endif %}>{{ status|replace('_', ' ')|title }}</option>{% endfor %}</select>
+    <label for="sort">Sort by created at</label>
+    <select id="sort" name="sort">
+      <option value="oldest" {% if selected_sort == 'oldest' %}selected{% endif %}>Oldest first</option>
+      <option value="newest" {% if selected_sort == 'newest' %}selected{% endif %}>Newest first</option>
+    </select><button type="submit">Apply</button><span class="count">{{ tasks|length }} task{{ '' if tasks|length == 1 else 's' }}</span>
   </form>
   <section class="task-list" aria-label="Tasks">
   {% for task in tasks %}
@@ -21,16 +26,16 @@
         <a class="button" href="/ui/tasks/{{ task.task_id }}/edit">Edit details</a>
         {% if task.status != 'completed' %}
         <form action="/ui/tasks/{{ task.task_id }}/status" method="post">
-          <input type="hidden" name="filter_status" value="{{ selected_status }}">
+          <input type="hidden" name="filter_status" value="{{ selected_status }}"><input type="hidden" name="sort" value="{{ selected_sort }}">
           {% if task.status == 'pending' %}<button name="status" value="in_progress">Start task</button>{% else %}<button name="status" value="pending">Set pending</button>{% endif %}
           <button class="primary" name="status" value="completed">Complete</button>
         </form>
         {% endif %}
-        <details class="delete"><summary>Delete</summary><form action="/ui/tasks/{{ task.task_id }}/delete" method="post"><p>Permanently delete this task?</p><input type="hidden" name="filter_status" value="{{ selected_status }}"><button class="danger" name="confirm" value="yes">Yes, delete task</button><p class="meta">Close this panel to cancel.</p></form></details>
+        <details class="delete"><summary>Delete</summary><form action="/ui/tasks/{{ task.task_id }}/delete" method="post"><p>Permanently delete this task?</p><input type="hidden" name="filter_status" value="{{ selected_status }}"><input type="hidden" name="sort" value="{{ selected_sort }}"><button class="danger" name="confirm" value="yes">Yes, delete task</button><p class="meta">Close this panel to cancel.</p></form></details>
       </div>
     </article>
   {% else %}
-    <div class="empty"><h2>{{ 'No matching tasks' if selected_status else 'No tasks yet' }}</h2><p>{{ 'Choose another status to see more tasks.' if selected_status else 'Create your first task to get started.' }}</p><a href="{{ '/' if selected_status else '/ui/tasks/new' }}">{{ 'Show all tasks' if selected_status else 'Create a task' }} →</a></div>
+    <div class="empty"><h2>{{ 'No matching tasks' if selected_status else 'No tasks yet' }}</h2><p>{{ 'Choose another status to see more tasks.' if selected_status else 'Create your first task to get started.' }}</p><a href="{{ '/?status=&sort=' ~ selected_sort if selected_status else '/ui/tasks/new' }}">{{ 'Show all tasks' if selected_status else 'Create a task' }} →</a></div>
   {% endfor %}
   </section>
 </main>

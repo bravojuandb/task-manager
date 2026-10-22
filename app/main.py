@@ -54,25 +54,19 @@ def create_task(task: TaskCreate):
 @app.get("/tasks")
 def list_tasks(
     status: Literal["pending", "in_progress", "completed"] | None = None,
+    sort: Literal["oldest", "newest"] = "oldest",
 ):
+    # SQL keywords cannot be value parameters: choose only fixed directions.
+    direction = {"oldest": "ASC", "newest": "DESC"}[sort]
+    query = "SELECT * FROM tasks"
+    parameters = ()
+    if status is not None:
+        query += " WHERE status = %s"
+        parameters = (status,)
+    query += f" ORDER BY created_at {direction}, task_id {direction}"
     with get_connection() as connection:
         with connection.cursor() as cursor:
-            if status is None:
-                cursor.execute("""
-                    SELECT *
-                    FROM tasks
-                    ORDER BY created_at DESC, task_id DESC;
-                """)
-            else:
-                cursor.execute(
-                    """
-                    SELECT *
-                    FROM tasks
-                    WHERE status = %s
-                    ORDER BY created_at DESC, task_id DESC;
-                    """,
-                    (status,),
-                )
+            cursor.execute(query, parameters)
             tasks = cursor.fetchall()
 
     return tasks

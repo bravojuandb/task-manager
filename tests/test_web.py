@@ -61,7 +61,7 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
     async def test_list_filter_and_escaping(self):
         code, _, body = await request(self.app, "/?status=pending")
         self.assertEqual(code, 200)
-        self.operations["list_tasks"].assert_called_with("pending")
+        self.operations["list_tasks"].assert_called_with("pending", sort="oldest")
         self.assertIn("&lt;script&gt;Example&lt;/script&gt;", body)
         self.assertNotIn("<script>Example</script>", body)
         self.assertEqual((await request(self.app, "/?status=invalid"))[0], 422)
@@ -112,8 +112,38 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.task["completed_at"] = self.task["created_at"]
         code, _, body = await request(self.app, "/")
         self.assertEqual(code, 200)
-        self.assertNotIn('value="in_progress"', body.split('<section')[1])
-        self.assertNotIn('value="pending"', body.split('<section')[1])
+        self.assertNotIn('name="status" value="in_progress"', body.split('<section')[1])
+        self.assertNotIn('name="status" value="pending"', body.split('<section')[1])
         self.operations["list_tasks"].return_value = []
-        self.assertIn("No tasks yet", (await request(self.app, "/"))[2])
+        self.assertIn("No tasks yet", (await request(self.app, "/?status="))[2])
+        self.assertIn("No matching tasks", (await request(self.app, "/"))[2])
         self.assertIn("No matching tasks", (await request(self.app, "/?status=completed"))[2])
+
+    async def test_sort_selection_and_redirects(self):
+        code, _, body = await request(self.app, '/?status=pending&sort=newest')
+        self.assertEqual(code, 200)
+        self.operations['list_tasks'].assert_called_with('pending', sort='newest')
+        self.assertIn('value="newest" selected', body)
+        self.assertEqual((await request(self.app, '/?sort=invalid'))[0], 422)
+        data = dict(status='completed', filter_status='pending', sort='newest')
+        for action in ('status', 'delete'):
+            data['confirm'] = 'yes'
+            code, headers, _ = await request(self.app, '/ui/tasks/1/' + action, 'POST', data)
+            self.assertEqual(code, 303)
+            self.assertEqual(headers[b'location'], b'/?status=pending&sort=newest')
+
+    async def test_default_pending_and_explicit_all_statuses(self):
+        code, _, body = await request(self.app, '/')
+        self.assertEqual(code, 200)
+        self.operations['list_tasks'].assert_called_with('pending', sort='oldest')
+        self.assertIn('value="pending" selected', body)
+        await request(self.app, '/?status=')
+        self.operations['list_tasks'].assert_called_with(None, sort='oldest')
+        for action in ('status', 'delete'):
+            code, headers, _ = await request(self.app, '/ui/tasks/1/' + action, 'POST',
+                dict(status='completed', confirm='yes', filter_status='', sort='newest'))
+            self.assertEqual(code, 303)
+            self.assertEqual(headers[b'location'], b'/?status=&sort=newest')
+        self.operations['list_tasks'].return_value = []
+        body = (await request(self.app, '/'))[2]
+        self.assertIn('/?status=&amp;sort=oldest', body)

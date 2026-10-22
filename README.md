@@ -12,7 +12,7 @@ Configure the ignored `.env` using `.env.example`, then run:
 Open http://127.0.0.1:8000/ for the task interface, or `/docs` for the JSON API.
 When working over SSH, forward port 8000 to your development computer.
 
-The interface has a task list with optional status filtering and a shared create/edit
+The interface has a task list with optional status filtering and creation-date sorting and a shared create/edit
 form. Completed tasks can have their details edited but cannot be reopened. Deletion
 requires expanding the confirmation panel and choosing “Yes, delete task”.
 
@@ -82,3 +82,13 @@ For Data Engineering: `ExecStart` selects the executable, `WorkingDirectory`
 sets its context, `.env` supplies configuration, `Restart` handles process
 failures, and the journal collects logs. The same concepts apply to running
 data pipelines reliably, although scheduled jobs often use systemd timers.
+
+## Task list sorting
+
+Tasks are ordered by `created_at ASC, task_id ASC` (oldest first) by default.
+Choose **Newest first** in the list, or use `GET /tasks?sort=newest`. The sort
+combines with the status filter and is preserved when changing status or deleting.
+
+The web homepage defaults to **Pending**, oldest first. Select **All statuses**
+(or visit `/?status=`) to view all tasks. The JSON API still lists all statuses
+when its status parameter is omitted.
