@@ -12,7 +12,7 @@ Configure the ignored `.env` using `.env.example`, then run:
 Open http://127.0.0.1:8000/ for the task interface, or `/docs` for the JSON API.
 When working over SSH, forward port 8000 to your development computer.
 
-The interface has a task list with optional status filtering and a shared create/edit
+The interface has a task list with optional status filtering and creation-date sorting and a shared create/edit
 form. Completed tasks can have their details edited but cannot be reopened. Deletion
 requires expanding the confirmation panel and choosing “Yes, delete task”.
 
@@ -27,7 +27,64 @@ requires expanding the confirmation panel and choosing “Yes, delete task”.
    Validation errors redisplay the form with the submitted values and field errors.
 
 Jinja2 escapes task text when rendering HTML. The UI uses plain HTML forms and CSS;
-no JavaScript framework is required. Dates include the database-returned timezone.
+no JavaScript framework is required. A small script toggles order-specific fields.
+Dates include the database-returned timezone.
+
+## Orders and price requests
+
+Contacts are stored in `customer`, `supplier` or `other`; `recipient` is removed.
+Customer and supplier fields are visible for every task type. Non-order tasks
+require at least one contact and may contain customer, supplier and other together.
+Orders still require both customer and supplier. Only orders use placed/delivered
+flags. The API accepts the contact columns directly, for example:
+
+```json
+{"task_type": "email", "other": "Example contact", "description": "Send an update"}
+```
+
+Select `order` to enter both customer and supplier. Orders
+require both names. Unchecked progress flags mean pending; placed means in progress;
+delivered means completed and sets the completion timestamp. Delivered requires
+placed. Completed orders cannot be reopened; editing their details keeps the
+original completion timestamp. The ordinary status endpoint rejects order changes:
+use the detail form (or PUT details) with the order flags instead.
+
+For existing databases, apply `002_order_details.sql` and then
+`003_contact_roles.sql`, each once in a transaction. Migration 002 has already
+been applied on k8. Stop the application before 003 because the running code
+still references the column it removes. A fresh database should use
+`sql/schema.sql` directly, without these migrations.
+
+```bash
+sudo systemctl stop k8-task-manager.service && \
+psql -h 127.0.0.1 -U k8_app -d task_manager -W \
+  -v ON_ERROR_STOP=1 --single-transaction -f sql/003_contact_roles.sql && \
+sudo systemctl start k8-task-manager.service
+```
+
+Migration 003 moves quotation recipients into customer and price-request
+recipients into supplier. Other old recipients, including unclassified order
+contacts, go provisionally into other to preserve their names. Review those
+contacts and select the correct role when editing. Already populated order
+customers and suppliers are retained. No progress flags are inferred. Edit each
+old order to supply the real parties and flags; completed orders must remain
+delivered. The migration uses
+`CHECK ... NOT VALID`: new and edited rows must follow the rules immediately,
+while untouched old rows are retained. After all old orders are corrected, run:
+
+```sql
+ALTER TABLE tasks VALIDATE CONSTRAINT tasks_parties_consistent;
+ALTER TABLE tasks VALIDATE CONSTRAINT tasks_order_progress_consistent;
+```
+
+To run the optional database tests as well as the regular tests:
+
+```bash
+K8_TEST_DATABASE=1 .venv/bin/python -m unittest discover -s tests -v
+```
+
+These database tests use temporary tables on their own connections and roll back
+all synthetic data. They require the configured application database connection.
 
 ## Tests
 
@@ -82,3 +139,20 @@ For Data Engineering: `ExecStart` selects the executable, `WorkingDirectory`
 sets its context, `.env` supplies configuration, `Restart` handles process
 failures, and the journal collects logs. The same concepts apply to running
 data pipelines reliably, although scheduled jobs often use systemd timers.
+
+## Flexible contacts (migration 004)
+
+After migration 003, apply `sql/004_flexible_contacts.sql` once in a transaction,
+then restart the service. It relaxes the contact constraint for non-order tasks;
+no task data is changed. Existing orders awaiting classification are retained.
+Fresh databases use the current `sql/schema.sql` and do not run migrations.
+
+## Task list sorting
+
+Tasks are ordered by `created_at ASC, task_id ASC` (oldest first) by default.
+Choose **Newest first** in the list, or use `GET /tasks?sort=newest`. The sort
+combines with the status filter and is preserved when changing status or deleting.
+
+The web homepage defaults to **Pending**, oldest first. Select **All statuses**
+(or visit `/?status=`) to view all tasks. The JSON API still lists all statuses
+when its status parameter is omitted.

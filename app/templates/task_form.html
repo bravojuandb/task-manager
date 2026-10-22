@@ -4,13 +4,26 @@
 <body><main class="shell form-shell">
   <header class="page-header"><div><a class="brand" href="/">← All tasks</a><h1>{{ 'Edit task #' ~ task_id if task_id else 'New task' }}</h1><p>{{ 'Update the details below.' if task_id else 'Capture what needs doing.' }}</p></div></header>
   {% if errors %}<div class="alert" role="alert">{{ errors.get('form', 'Please check the highlighted fields. Your entries have been kept.') }}</div>{% endif %}
+  {% if values.legacy_contact %}<div class="alert">Existing order. Contact to classify: <strong>{{ values.legacy_contact }}</strong>. Enter the customer and supplier, then confirm the actual order progress using the checkboxes.{% if values.status == 'completed' %} This order was already completed and must remain delivered.{% endif %}</div>{% endif %}
   <form class="editor" method="post" action="{{ '/ui/tasks/' ~ task_id ~ '/edit' if task_id else '/ui/tasks/new' }}">
     <label for="task_type">Task type</label><select id="task_type" name="task_type" required {% if errors.get('task_type') %}aria-invalid="true" aria-describedby="type-error"{% endif %}>{% for kind in task_types %}<option value="{{ kind }}" {% if values.task_type == kind %}selected{% endif %}>{{ kind|replace('_', ' ')|title }}</option>{% endfor %}</select>
     {% if errors.get('task_type') %}<p class="field-error" id="type-error">Choose one of the listed task types.</p>{% endif %}
-    <label for="recipient">Recipient</label><input id="recipient" name="recipient" value="{{ values.recipient }}" placeholder="Person or organization" required {% if errors.get('recipient') %}aria-invalid="true" aria-describedby="recipient-error"{% endif %}>
-    {% if errors.get('recipient') %}<p class="field-error" id="recipient-error">Enter a recipient with at least one non-whitespace character.</p>{% endif %}
+    <p class="meta">Enter at least one contact. Orders require both customer and supplier.</p>
+    {% for role in ('customer', 'supplier', 'other') %}
+    {% set visible = role != 'other' or values.task_type != 'order' %}
+    <fieldset id="{{ role }}-fields" {% if not visible %}hidden disabled{% endif %}>
+      <label for="{{ role }}">{{ role|title }}</label><input id="{{ role }}" name="{{ role }}" value="{{ values.get(role) or '' }}" {% if values.task_type == 'order' and role != 'other' %}required{% endif %} {% if errors.get(role) %}aria-invalid="true" aria-describedby="{{ role }}-error"{% endif %}>
+      {% if errors.get(role) %}<p id="{{ role }}-error" class="field-error">Enter a non-blank {{ role }} contact.</p>{% endif %}
+    </fieldset>
+    {% endfor %}
+    <fieldset id="order-fields" {% if values.task_type != 'order' %}hidden disabled{% endif %}>
+      <legend>Order progress</legend>
+      <label class="checkbox"><input type="checkbox" name="order_placed" id="order_placed" value="true" {% if values.order_placed %}checked{% endif %}> Order placed</label>
+      <label class="checkbox"><input type="checkbox" name="order_delivered" id="order_delivered" value="true" {% if values.order_delivered %}checked{% endif %}> Order delivered</label>
+      <p class="meta">Placed → in progress. Delivered → completed. An order must be placed before it can be delivered. Completed orders cannot be reopened.</p>
+    </fieldset>
     <label for="description">Description</label><textarea id="description" name="description" rows="6" required placeholder="What needs to happen?" {% if errors.get('description') %}aria-invalid="true" aria-describedby="description-error"{% endif %}>{{ values.description }}</textarea>
     {% if errors.get('description') %}<p class="field-error" id="description-error">Enter a description with at least one non-whitespace character.</p>{% endif %}
     <div class="actions"><button class="primary" type="submit">{{ 'Save changes' if task_id else 'Create task' }}</button><a class="button" href="/">Cancel</a></div>
   </form>
-</main></body></html>
+</main><script src="{{ url_for('static', path='task-form.js') }}" defer></script></body></html>

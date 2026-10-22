@@ -1,5 +1,10 @@
 :root { color-scheme: dark; font-family: system-ui, -apple-system, sans-serif; color: #e9edf5; background: #101218; line-height: 1.6; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+legend { font-weight: 650; padding: 12px 0 0; }
+.checkbox { display: flex; align-items: center; gap: 10px; }
+.checkbox input { width: 18px; height: 18px; accent-color: #b0c7ff; }
 body { margin: 0; }
 a { color: #a9c2ff; text-decoration: none; }
 a:hover { text-decoration: underline; }

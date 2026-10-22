@@ -45,7 +45,7 @@ async def request(app, path, method="GET", data=None):
 
 class WebTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.task = dict(task_id=1, task_type="email", recipient="<script>Example</script>",
+        self.task = dict(task_id=1, task_type="email", other="<script>Example</script>",
                          description="First line\nSecond line", status="pending",
                          created_at=datetime.now(timezone.utc), completed_at=None)
         self.operations = {name: Mock() for name in (
@@ -61,27 +61,27 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
     async def test_list_filter_and_escaping(self):
         code, _, body = await request(self.app, "/?status=pending")
         self.assertEqual(code, 200)
-        self.operations["list_tasks"].assert_called_with("pending")
+        self.operations["list_tasks"].assert_called_with("pending", sort="oldest")
         self.assertIn("&lt;script&gt;Example&lt;/script&gt;", body)
         self.assertNotIn("<script>Example</script>", body)
         self.assertEqual((await request(self.app, "/?status=invalid"))[0], 422)
 
     async def test_create_validation_and_redirect(self):
-        data = dict(task_type="email", recipient="   ", description="Keep this text")
+        data = dict(task_type="email", contact_type="other", other="   ", description="Keep this text")
         code, _, body = await request(self.app, "/ui/tasks/new", "POST", data)
         self.assertEqual(code, 422)
         self.assertIn("Keep this text", body)
         self.operations["create_task"].assert_not_called()
-        data["recipient"] = " Example "
+        data["other"] = " Example "
         code, headers, _ = await request(self.app, "/ui/tasks/new", "POST", data)
         self.assertEqual(code, 303)
         self.assertEqual(headers[b"location"], b"/")
-        self.assertEqual(self.operations["create_task"].call_args.args[0].recipient, "Example")
+        self.assertEqual(self.operations["create_task"].call_args.args[0].other, "Example")
 
     async def test_edit_and_missing_task(self):
         self.assertEqual((await request(self.app, "/ui/tasks/1/edit"))[0], 200)
         code, _, _ = await request(self.app, "/ui/tasks/1/edit", "POST",
-                                  dict(task_type="other", recipient="Example", description="Revised"))
+                                  dict(task_type="other", contact_type="other", other="Example", description="Revised"))
         self.assertEqual(code, 303)
         self.assertEqual(self.operations["update_task_details"].call_args.args[0], 1)
         self.operations["retrieve_task"].side_effect = HTTPException(404, "Task not found")
@@ -112,8 +112,69 @@ class WebTests(unittest.IsolatedAsyncioTestCase):
         self.task["completed_at"] = self.task["created_at"]
         code, _, body = await request(self.app, "/")
         self.assertEqual(code, 200)
-        self.assertNotIn('value="in_progress"', body.split('<section')[1])
-        self.assertNotIn('value="pending"', body.split('<section')[1])
+        self.assertNotIn('name="status" value="in_progress"', body.split('<section')[1])
+        self.assertNotIn('name="status" value="pending"', body.split('<section')[1])
         self.operations["list_tasks"].return_value = []
-        self.assertIn("No tasks yet", (await request(self.app, "/"))[2])
+        self.assertIn("No tasks yet", (await request(self.app, "/?status="))[2])
+        self.assertIn("No matching tasks", (await request(self.app, "/"))[2])
         self.assertIn("No matching tasks", (await request(self.app, "/?status=completed"))[2])
+
+    async def test_contacts_visible_and_multiple_values_preserved(self):
+        from html.parser import HTMLParser
+        class Fields(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.fields = {}
+            def handle_starttag(self, tag, attrs):
+                if tag == 'fieldset':
+                    attrs = dict(attrs)
+                    self.fields[attrs.get('id')] = attrs
+        for kind in ('email', 'phone_call', 'order', 'follow_up', 'quotation', 'price_request', 'other'):
+            self.task['task_type'] = kind
+            page = (await request(self.app, '/ui/tasks/1/edit'))[2]
+            fields = Fields()
+            fields.feed(page)
+            for role in ('customer', 'supplier'):
+                self.assertNotIn('hidden', fields.fields[role + '-fields'])
+                self.assertNotIn('disabled', fields.fields[role + '-fields'])
+            self.assertEqual('hidden' in fields.fields['order-fields'], kind != 'order')
+            data = dict(task_type=kind, description='Test', customer=' Customer ', supplier=' Supplier ')
+            self.assertEqual((await request(self.app, '/ui/tasks/new', 'POST', data))[0], 303)
+            saved = self.operations['create_task'].call_args.args[0]
+            self.assertEqual(saved.customer, 'Customer')
+            self.assertEqual(saved.supplier, 'Supplier')
+        self.assertNotIn('name="recipient"', page)
+        self.assertNotIn('name="contact_type"', page)
+        self.operations['create_task'].reset_mock()
+        self.assertEqual((await request(self.app, '/ui/tasks/new', 'POST',
+                         dict(task_type='email', customer=' ', supplier='', other=' ', description='Test')))[0], 422)
+        self.operations['create_task'].assert_not_called()
+
+    async def test_sort_selection_and_redirects(self):
+        code, _, body = await request(self.app, '/?status=pending&sort=newest')
+        self.assertEqual(code, 200)
+        self.operations['list_tasks'].assert_called_with('pending', sort='newest')
+        self.assertIn('value="newest" selected', body)
+        self.assertEqual((await request(self.app, '/?sort=invalid'))[0], 422)
+        data = dict(status='completed', filter_status='pending', sort='newest')
+        for action in ('status', 'delete'):
+            data['confirm'] = 'yes'
+            code, headers, _ = await request(self.app, '/ui/tasks/1/' + action, 'POST', data)
+            self.assertEqual(code, 303)
+            self.assertEqual(headers[b'location'], b'/?status=pending&sort=newest')
+
+    async def test_default_pending_and_explicit_all_statuses(self):
+        code, _, body = await request(self.app, '/')
+        self.assertEqual(code, 200)
+        self.operations['list_tasks'].assert_called_with('pending', sort='oldest')
+        self.assertIn('value="pending" selected', body)
+        await request(self.app, '/?status=')
+        self.operations['list_tasks'].assert_called_with(None, sort='oldest')
+        for action in ('status', 'delete'):
+            code, headers, _ = await request(self.app, '/ui/tasks/1/' + action, 'POST',
+                dict(status='completed', confirm='yes', filter_status='', sort='newest'))
+            self.assertEqual(code, 303)
+            self.assertEqual(headers[b'location'], b'/?status=&sort=newest')
+        self.operations['list_tasks'].return_value = []
+        body = (await request(self.app, '/'))[2]
+        self.assertIn('/?status=&amp;sort=oldest', body)

@@ -41,11 +41,14 @@ def create_task(task: TaskCreate):
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                INSERT INTO tasks (task_type, recipient, description)
-                VALUES (%s, %s, %s)
+                INSERT INTO tasks (task_type, other, description, customer, supplier,
+                                   order_placed, order_delivered, status, completed_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
+                        CASE WHEN %s THEN CURRENT_TIMESTAMP ELSE NULL END)
                 RETURNING *;
                 """,
-                (task.task_type, task.recipient, task.description),
+                (task.task_type, task.other, task.description, task.customer, task.supplier,
+                 task.order_placed, task.order_delivered, task.order_status(), task.order_delivered),
             )
             created_task = cursor.fetchone()
 
@@ -54,25 +57,19 @@ def create_task(task: TaskCreate):
 @app.get("/tasks")
 def list_tasks(
     status: Literal["pending", "in_progress", "completed"] | None = None,
+    sort: Literal["oldest", "newest"] = "oldest",
 ):
+    # SQL keywords cannot be value parameters: choose only fixed directions.
+    direction = {"oldest": "ASC", "newest": "DESC"}[sort]
+    query = "SELECT * FROM tasks"
+    parameters = ()
+    if status is not None:
+        query += " WHERE status = %s"
+        parameters = (status,)
+    query += f" ORDER BY created_at {direction}, task_id {direction}"
     with get_connection() as connection:
         with connection.cursor() as cursor:
-            if status is None:
-                cursor.execute("""
-                    SELECT *
-                    FROM tasks
-                    ORDER BY created_at DESC, task_id DESC;
-                """)
-            else:
-                cursor.execute(
-                    """
-                    SELECT *
-                    FROM tasks
-                    WHERE status = %s
-                    ORDER BY created_at DESC, task_id DESC;
-                    """,
-                    (status,),
-                )
+            cursor.execute(query, parameters)
             tasks = cursor.fetchall()
 
     return tasks
@@ -107,6 +104,9 @@ def update_task_status(task_id: int, update: TaskStatusUpdate):
             task = cursor.fetchone()
             if task is None:
                 raise HTTPException(status_code=404, detail="Task not found")
+
+            if task["task_type"] == "order":
+                raise HTTPException(status_code=409, detail="Edit the order's placed/delivered checkboxes to change its status.")
 
             if task["status"] == "completed":
                 if update.status != "completed":
@@ -152,16 +152,30 @@ def delete_task(task_id: int):
 def update_task_details(task_id: int, details: TaskCreate):
     with get_connection() as connection:
         with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM tasks WHERE task_id = %s FOR UPDATE", (task_id,))
+            original = cursor.fetchone()
+            if original is None:
+                raise HTTPException(status_code=404, detail="Task not found")
+            status = details.order_status() if details.task_type == "order" else original["status"]
+            if original["status"] == "completed" and status != "completed":
+                raise HTTPException(status_code=409, detail="Completed tasks cannot be reopened. A completed order must remain delivered.")
             cursor.execute(
                 """
                 UPDATE tasks
                 SET task_type = %s,
-                    recipient = %s,
-                    description = %s
+                    other = %s,
+                    description = %s,
+                    customer = %s, supplier = %s,
+                    order_placed = %s, order_delivered = %s,
+                    status = %s,
+                    completed_at = CASE WHEN %s = 'completed'
+                        THEN COALESCE(completed_at, CURRENT_TIMESTAMP) ELSE NULL END
                 WHERE task_id = %s
                 RETURNING *;
                 """,
-                (details.task_type, details.recipient, details.description, task_id),
+                (details.task_type, details.other, details.description, details.customer,
+                 details.supplier, details.order_placed, details.order_delivered,
+                 status, status, task_id),
             )
             updated_task = cursor.fetchone()
             if updated_task is None:
