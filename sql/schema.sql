@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     other TEXT CHECK (other ~ '[^[:space:]]'),
     order_placed BOOLEAN NOT NULL DEFAULT FALSE,
     order_delivered BOOLEAN NOT NULL DEFAULT FALSE,
+    duration_minutes INTEGER
+        CONSTRAINT tasks_duration_not_negative CHECK (duration_minutes >= 0),
     CONSTRAINT tasks_parties_consistent CHECK (
         (task_type = 'order' AND customer IS NOT NULL AND supplier IS NOT NULL AND other IS NULL)
         OR (task_type <> 'order' AND num_nonnulls(customer, supplier, other) >= 1)
@@ -29,4 +31,5 @@ CREATE TABLE IF NOT EXISTS tasks (
         (status = 'completed' AND completed_at IS NOT NULL)
         OR (status <> 'completed' AND completed_at IS NULL)
     )
+
 );

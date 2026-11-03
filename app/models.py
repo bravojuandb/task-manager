@@ -1,6 +1,6 @@
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator, NonNegativeInt
 
 
 RequiredText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
@@ -16,6 +16,7 @@ class TaskCreate(BaseModel):
     other: RequiredText | None = None
     order_placed: bool = False
     order_delivered: bool = False
+    duration_minutes: NonNegativeInt | None = None
 
     @model_validator(mode="after")
     def validate_parties_and_order(self):
