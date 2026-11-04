@@ -24,6 +24,7 @@
     </fieldset>
     <label for="description">Description</label><textarea id="description" name="description" rows="6" required placeholder="What needs to happen?" {% if errors.get('description') %}aria-invalid="true" aria-describedby="description-error"{% endif %}>{{ values.description }}</textarea>
     {% if errors.get('description') %}<p class="field-error" id="description-error">Enter a description with at least one non-whitespace character.</p>{% endif %}
+    <label for="duration_minutes">Duration (minutes)</label><input id="duration_minutes" name="duration_minutes" type="number" min="0" step="1" placeholder="Optional" value="{{ values.duration_minutes if values.duration_minutes is not none else '' }}">
     <div class="actions"><button class="primary" type="submit">{{ 'Save changes' if task_id else 'Create task' }}</button><a class="button" href="/">Cancel</a></div>
   </form>
 </main><script src="{{ url_for('static', path='task-form.js') }}" defer></script></body></html>

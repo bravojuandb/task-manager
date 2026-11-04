@@ -31,3 +31,19 @@ class TaskCreateTests(unittest.TestCase):
     def test_rejects_unknown_task_type(self):
         with self.assertRaises(ValidationError):
             TaskCreate(task_type="invalid", customer="Example", description="Test")
+
+    def test_duration_accepts_non_negative_minutes(self):
+        for minutes in (0, 45):
+            with self.subTest(minutes=minutes):
+                task = TaskCreate(task_type="email", customer="Example", description="Test",
+                                  duration_minutes=minutes)
+                self.assertEqual(task.duration_minutes, minutes)
+
+    def test_duration_rejects_negative_minutes(self):
+        with self.assertRaises(ValidationError):
+            TaskCreate(task_type="email", customer="Example", description="Test",
+                       duration_minutes=-5)
+
+    def test_duration_is_optional(self):
+        task = TaskCreate(task_type="email", customer="Example", description="Test")
+        self.assertIsNone(task.duration_minutes)

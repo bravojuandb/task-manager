@@ -30,7 +30,7 @@
         {% for role in ('customer', 'supplier', 'other') %}{% if task[role] %}<p class="meta">{{ role|title }}: {{ task[role] }}</p>{% endif %}{% endfor %}
       {% endif %}
       <p class="description">{{ task.description }}</p>
-      <p class="meta">Created {{ task.created_at.strftime('%d %b %Y, %H:%M %Z') }}{% if task.completed_at %} · Completed {{ task.completed_at.strftime('%d %b %Y, %H:%M %Z') }}{% endif %}</p>
+      <p class="meta">Created {{ task.created_at.strftime('%d %b %Y, %H:%M %Z') }}{% if task.completed_at %} · Completed {{ task.completed_at.strftime('%d %b %Y, %H:%M %Z') }}{% endif %}{% if task.duration_minutes is not none %} · Duration: {{ task.duration_minutes }} min{% endif %}</p>
       <div class="actions">
         <a class="button" href="/ui/tasks/{{ task.task_id }}/edit">Edit details</a>
         {% if task.status != 'completed' and task.task_type != 'order' %}

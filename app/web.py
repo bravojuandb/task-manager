@@ -75,7 +75,7 @@ def create_web_router(
             if original["task_type"] == "order" and original.get("other"):
                 legacy_contact = original["other"]
         payload = dict(values)
-        for field in ("customer", "supplier", "other"):
+        for field in ("customer", "supplier", "other", "duration_minutes"):
             if not payload.get(field, "").strip():
                 payload[field] = None
         if payload["task_type"] == "order":
@@ -104,19 +104,23 @@ def create_web_router(
     def submit_new(request: Request, task_type: str = Form(""),
                    description: str = Form(""), other: str = Form(""),
                    customer: str = Form(""), supplier: str = Form(""),
-                   order_placed: bool = Form(False), order_delivered: bool = Form(False)):
+                   order_placed: bool = Form(False), order_delivered: bool = Form(False),
+                   duration_minutes: str = Form("")):
         return save(request, dict(task_type=task_type, other=other, description=description,
                                  customer=customer, supplier=supplier,
-                                 order_placed=order_placed, order_delivered=order_delivered))
+                                 order_placed=order_placed, order_delivered=order_delivered,
+                                 duration_minutes=duration_minutes))
 
     @router.post("/ui/tasks/{task_id}/edit")
     def submit_edit(request: Request, task_id: int, task_type: str = Form(""),
                     description: str = Form(""), other: str = Form(""),
                     customer: str = Form(""), supplier: str = Form(""),
-                    order_placed: bool = Form(False), order_delivered: bool = Form(False)):
+                    order_placed: bool = Form(False), order_delivered: bool = Form(False),
+                    duration_minutes: str = Form("")):
         return save(request, dict(task_type=task_type, other=other, description=description,
                                  customer=customer, supplier=supplier,
-                                 order_placed=order_placed, order_delivered=order_delivered), task_id)
+                                 order_placed=order_placed, order_delivered=order_delivered,
+                                 duration_minutes=duration_minutes), task_id)
 
     @router.post("/ui/tasks/{task_id}/status")
     def submit_status(request: Request, task_id: int, status: str = Form(""),

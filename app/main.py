@@ -42,13 +42,14 @@ def create_task(task: TaskCreate):
             cursor.execute(
                 """
                 INSERT INTO tasks (task_type, other, description, customer, supplier,
-                                   order_placed, order_delivered, status, completed_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
+                                   order_placed, order_delivered, duration_minutes, status, completed_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,
                         CASE WHEN %s THEN CURRENT_TIMESTAMP ELSE NULL END)
                 RETURNING *;
                 """,
                 (task.task_type, task.other, task.description, task.customer, task.supplier,
-                 task.order_placed, task.order_delivered, task.order_status(), task.order_delivered),
+                 task.order_placed, task.order_delivered, task.duration_minutes,
+                 task.order_status(), task.order_delivered),
             )
             created_task = cursor.fetchone()
 
@@ -167,6 +168,7 @@ def update_task_details(task_id: int, details: TaskCreate):
                     description = %s,
                     customer = %s, supplier = %s,
                     order_placed = %s, order_delivered = %s,
+                    duration_minutes = %s,
                     status = %s,
                     completed_at = CASE WHEN %s = 'completed'
                         THEN COALESCE(completed_at, CURRENT_TIMESTAMP) ELSE NULL END
@@ -174,7 +176,7 @@ def update_task_details(task_id: int, details: TaskCreate):
                 RETURNING *;
                 """,
                 (details.task_type, details.other, details.description, details.customer,
-                 details.supplier, details.order_placed, details.order_delivered,
+                 details.supplier, details.order_placed, details.order_delivered, details.duration_minutes,
                  status, status, task_id),
             )
             updated_task = cursor.fetchone()
